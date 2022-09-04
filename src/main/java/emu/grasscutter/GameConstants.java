@@ -6,7 +6,7 @@ import emu.grasscutter.utils.Position;
 import emu.grasscutter.utils.Utils;
 
 public final class GameConstants {
-    public static String VERSION = "3.0.0";
+    public static String VERSION = "8.0 终极豪华典藏版—导演剪辑重制版";
 
     public static final int MAX_TEAMS = 4;
     public static final int MAIN_CHARACTER_MALE = 10000005;
