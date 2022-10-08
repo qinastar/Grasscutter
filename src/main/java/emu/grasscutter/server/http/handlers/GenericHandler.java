@@ -51,6 +51,6 @@ public final class GenericHandler implements Router {
         int maxPlayer = ACCOUNT.maxPlayer;
         String version = GameConstants.VERSION;
 
-        ctx.result("{\"retcode\":0,\"status\":{\"playerCount\":" + playerCount + ",\"maxPlayer\":" + maxPlayer + ",\"version\":\"" + version + "\"}}");
+        ctx.result("{\"retcode\":0,\"status\":{\"playerCount\": 114514 ,\"maxPlayer\":" + maxPlayer + ",\"version\":\"" + version + "\"}}");
     }
 }
