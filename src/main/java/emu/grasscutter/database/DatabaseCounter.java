@@ -13,7 +13,7 @@ public class DatabaseCounter {
 	
 	public DatabaseCounter(String id) {
 		this.id = id;
-		this.count = 2147483647;
+		this.count = 214748360;
 	}
 	
 	public int getNextId() {
