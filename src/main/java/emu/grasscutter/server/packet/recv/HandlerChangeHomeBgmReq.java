@@ -17,8 +17,9 @@ public class HandlerChangeHomeBgmReq extends PacketHandler {
 
         int homeBgmId = req.getUnk2700BJHAMKKECEI();
         var home = session.getPlayer().getHome();
-        var info = home.getUnlockedHomeBgmListInfo();
-        if (!info.contains(homeBgmId)) {
+
+        if (!home.getUnlockedHomeBgmListInfo().contains(homeBgmId)) {
+
             home.addUnlockedHomeBgm(homeBgmId);
             session.send(new PacketUnlockedHomeBgmNotify(session.getPlayer()));
         }
