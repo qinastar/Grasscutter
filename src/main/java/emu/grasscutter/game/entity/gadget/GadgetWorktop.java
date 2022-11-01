@@ -21,6 +21,9 @@ public class GadgetWorktop extends GadgetContent {
     }
 
     public IntSet getWorktopOptions() {
+        if (this.worktopOptions == null) {
+            this.worktopOptions = new IntOpenHashSet();
+        }
         return worktopOptions;
     }
 

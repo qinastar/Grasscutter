@@ -1,22 +1,19 @@
 package emu.grasscutter.game.entity;
 
-import emu.grasscutter.Grasscutter;
 import emu.grasscutter.data.GameData;
-import emu.grasscutter.data.common.ItemParamData;
 import emu.grasscutter.data.common.PropGrowCurve;
 import emu.grasscutter.data.excels.EnvAnimalGatherConfigData;
-import emu.grasscutter.data.excels.ItemData;
 import emu.grasscutter.data.excels.MonsterCurveData;
 import emu.grasscutter.data.excels.MonsterData;
-import emu.grasscutter.game.inventory.GameItem;
+import emu.grasscutter.game.dungeons.DungeonPassConditionType;
 import emu.grasscutter.game.player.Player;
 import emu.grasscutter.game.props.ActionReason;
 import emu.grasscutter.game.props.EntityIdType;
 import emu.grasscutter.game.props.FightProperty;
 import emu.grasscutter.game.props.PlayerProperty;
 import emu.grasscutter.game.props.WatcherTriggerType;
+import emu.grasscutter.game.quest.enums.QuestTrigger;
 import emu.grasscutter.game.world.Scene;
-import emu.grasscutter.net.proto.VisionTypeOuterClass;
 import emu.grasscutter.net.proto.AbilitySyncStateInfoOuterClass.AbilitySyncStateInfo;
 import emu.grasscutter.net.proto.AnimatorParameterValueInfoPairOuterClass.AnimatorParameterValueInfoPair;
 import emu.grasscutter.net.proto.EntityAuthorityInfoOuterClass.EntityAuthorityInfo;
@@ -39,6 +36,8 @@ import it.unimi.dsi.fastutil.ints.Int2FloatMap;
 import it.unimi.dsi.fastutil.ints.Int2FloatOpenHashMap;
 import lombok.Getter;
 import lombok.Setter;
+
+import static emu.grasscutter.scripts.constants.EventType.EVENT_SPECIFIC_MONSTER_HP_CHANGE;
 
 public class EntityMonster extends GameEntity {
     private final MonsterData monsterData;
@@ -140,7 +139,7 @@ public class EntityMonster extends GameEntity {
     @Override
     public void onCreate() {
         // Lua event
-        getScene().getScriptManager().callEvent(EventType.EVENT_ANY_MONSTER_LIVE, new ScriptArgs(this.getConfigId()));
+        getScene().getScriptManager().callEvent(new ScriptArgs(EventType.EVENT_ANY_MONSTER_LIVE, this.getConfigId()));
     }
 
     @Override
@@ -161,6 +160,14 @@ public class EntityMonster extends GameEntity {
     }
 
     @Override
+    public void callLuaHPEvent() {
+        getScene().getScriptManager().callEvent(new ScriptArgs(EVENT_SPECIFIC_MONSTER_HP_CHANGE, getConfigId(), monsterData.getId())
+            .setSourceEntityId(getId())
+            .setParam3((int) this.getFightProperty(FightProperty.FIGHT_PROP_CUR_HP))
+            .setEventSource(Integer.toString(getConfigId())));
+    }
+
+    @Override
     public void onDeath(int killerId) {
         super.onDeath(killerId); // Invoke super class's onDeath() method.
 
@@ -177,13 +184,19 @@ public class EntityMonster extends GameEntity {
             }
             // prevent spawn monster after success
             if (getScene().getChallenge() != null && getScene().getChallenge().inProgress()) {
-                getScene().getScriptManager().callEvent(EventType.EVENT_ANY_MONSTER_DIE, new ScriptArgs().setParam1(this.getConfigId()));
+                getScene().getScriptManager().callEvent(new ScriptArgs(EventType.EVENT_ANY_MONSTER_DIE, this.getConfigId()));
             }else if (getScene().getChallenge() == null) {
-                getScene().getScriptManager().callEvent(EventType.EVENT_ANY_MONSTER_DIE, new ScriptArgs().setParam1(this.getConfigId()));
+                getScene().getScriptManager().callEvent(new ScriptArgs(EventType.EVENT_ANY_MONSTER_DIE, this.getConfigId()));
             }
         }
         // Battle Pass trigger
         getScene().getPlayers().forEach(p -> p.getBattlePassManager().triggerMission(WatcherTriggerType.TRIGGER_MONSTER_DIE, this.getMonsterId(), 1));
+        getScene().getPlayers().forEach(p -> p.getQuestManager().queueEvent(QuestTrigger.QUEST_CONTENT_MONSTER_DIE, this.getMonsterId()));
+        getScene().getPlayers().forEach(p -> p.getQuestManager().queueEvent(QuestTrigger.QUEST_CONTENT_KILL_MONSTER, this.getMonsterId()));
+
+        getScene().triggerDungeonEvent(DungeonPassConditionType.DUNGEON_COND_KILL_GROUP_MONSTER, this.getGroupId());
+        getScene().triggerDungeonEvent(DungeonPassConditionType.DUNGEON_COND_KILL_TYPE_MONSTER, this.getMonsterData().getType().getValue());
+        getScene().triggerDungeonEvent(DungeonPassConditionType.DUNGEON_COND_KILL_MONSTER, this.getMonsterId());
     }
 
     public void recalcStats() {

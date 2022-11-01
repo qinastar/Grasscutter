@@ -45,8 +45,7 @@ public final class SceneForceUnlockNotifyOuterClass {
    * <pre>
    * CmdId: 206
    * EnetChannelId: 0
-   * EnetIsReliable: false
-   * IsAllowClient: true
+   * EnetIsReliable: true
    * </pre>
    *
    * Protobuf type {@code SceneForceUnlockNotify}
@@ -383,8 +382,7 @@ public final class SceneForceUnlockNotifyOuterClass {
      * <pre>
      * CmdId: 206
      * EnetChannelId: 0
-     * EnetIsReliable: false
-     * IsAllowClient: true
+     * EnetIsReliable: true
      * </pre>
      *
      * Protobuf type {@code SceneForceUnlockNotify}

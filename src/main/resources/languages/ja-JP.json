@@ -85,6 +85,7 @@
         "avatarId": "キャラIDが無効な値です｡",
         "avatarLevel": "キャラレベルが無効な値です｡",
         "entityId": "エンティティIDが無効な値です｡",
+        "cfgId": "🇺🇸Invalid cfg ID.",
         "itemId": "アイテムIDが無効な値です｡",
         "itemLevel": "アイテムレベルが無効な値です｡",
         "itemRefinement": "アイテムの精錬ランクが無効な値です｡",
@@ -151,6 +152,10 @@
       "in_dungeon_error": "あなたはすでにその秘境にいます｡",
       "description": "秘境に入る｡"
     },
+    "entity": {
+      "description": "🇺🇸Modify an existing entity's properties",
+      "not_found_error": "🇺🇸Entity does not exist"
+    },
     "give": {
       "usage_relic": "使用方法: give <聖遺物ID> [メインステータスID] [<サブステータスID>[,<強化回数>]]... [lv<レベル 0-20>]",
       "illegal_relic": "この聖遺物IDはブラックリストに登録された範囲に属しています。必要な範囲ではない可能性があります。",
@@ -215,7 +220,8 @@
       "finished": "クエスト %s を終了しました。",
       "not_found": "クエストが見つかりません｡",
       "invalid_id": "クエストIDが無効です｡",
-      "description": "クエストを追加または終了する｡"
+      "description": "クエストを追加または終了する｡",
+      "enabled": "Questing enabled."
     },
     "reload": {
       "reload_start": "設定を再読み込みしています。",

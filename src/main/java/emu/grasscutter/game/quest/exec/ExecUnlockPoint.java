@@ -15,9 +15,7 @@ public class ExecUnlockPoint extends QuestExecHandler {
         int pointId = Integer.parseInt(paramStr[1]);
         boolean isStatue = quest.getMainQuestId() == 303 || quest.getMainQuestId() == 352;
 
-        quest.getOwner().getProgressManager().unlockTransPoint(sceneId, pointId, isStatue);
-
         // Done.
-        return true;
+        return quest.getOwner().getProgressManager().unlockTransPoint(sceneId, pointId, isStatue);
     }
 }

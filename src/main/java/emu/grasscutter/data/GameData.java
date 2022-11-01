@@ -9,6 +9,8 @@ import java.util.Optional;
 
 import emu.grasscutter.Grasscutter;
 import emu.grasscutter.data.binout.*;
+import emu.grasscutter.data.binout.routes.Route;
+import emu.grasscutter.game.dungeons.DungeonDropEntry;
 import emu.grasscutter.game.quest.QuestEncryptionKey;
 import emu.grasscutter.utils.Utils;
 import emu.grasscutter.data.excels.*;
@@ -40,6 +42,11 @@ public class GameData {
     private static final Map<String, AbilityEmbryoEntry> abilityEmbryos = new HashMap<>();
 
     // ExcelConfigs
+    @Getter private static final Int2ObjectMap<ActivityCondExcelConfigData> activityCondExcelConfigDataMap = new Int2ObjectOpenHashMap<>();
+    @Getter private static final Int2ObjectMap<DungeonPassConfigData> dungeonPassConfigDataMap = new Int2ObjectOpenHashMap<>();
+    @Getter private static final Int2ObjectMap<DungeonChallengeConfigData> dungeonChallengeConfigDataMap = new Int2ObjectOpenHashMap<>();
+    @Getter private static final Int2ObjectMap<Int2ObjectMap<Route>> sceneRouteData = new Int2ObjectOpenHashMap<>();
+
     @Getter private static final ArrayList<CodexReliquaryData> codexReliquaryArrayList = new ArrayList<>();
     @Getter private static final Int2ObjectMap<ActivityData> activityDataMap = new Int2ObjectOpenHashMap<>();
     @Getter private static final Int2ObjectMap<ActivityShopData> activityShopDataMap = new Int2ObjectOpenHashMap<>();
@@ -119,6 +126,8 @@ public class GameData {
     private static final Int2ObjectMap<CodexReliquaryData> codexReliquaryDataMap = new Int2ObjectOpenHashMap<>();
     private static final Int2ObjectMap<CodexWeaponData> codexWeaponDataMap = new Int2ObjectOpenHashMap<>();
 
+    @Getter private static final Int2ObjectMap<List<DungeonDropEntry>> dungeonDropDataMap = new Int2ObjectOpenHashMap<>();
+
     // Cache
     @Getter private static final IntList scenePointIdList = new IntArrayList();
     @Getter private static final List<OpenStateData> openStateList = new ArrayList<>();
@@ -166,15 +175,15 @@ public class GameData {
 
     // Non-nullable value getters
     public static int getAvatarLevelExpRequired(int level) {
-        return Optional.ofNullable(avatarLevelDataMap.get(level)).map(d -> d.getExp()).orElse(0);
+        return Optional.ofNullable(avatarLevelDataMap.get(level)).map(AvatarLevelData::getExp).orElse(0);
     }
 
     public static int getAvatarFetterLevelExpRequired(int level) {
-        return Optional.ofNullable(avatarFetterLevelDataMap.get(level)).map(d -> d.getExp()).orElse(0);
+        return Optional.ofNullable(avatarFetterLevelDataMap.get(level)).map(AvatarFetterLevelData::getExp).orElse(0);
     }
 
     public static int getRelicExpRequired(int rankLevel, int level) {
-        return Optional.ofNullable(getRelicLevelData(rankLevel, level)).map(d -> d.getExp()).orElse(0);
+        return Optional.ofNullable(getRelicLevelData(rankLevel, level)).map(ReliquaryLevelData::getExp).orElse(0);
     }
 
 
@@ -232,5 +241,9 @@ public class GameData {
         }
 
         return shopGoods;
+    }
+
+    public static Int2ObjectMap<Route> getSceneRoutes(int sceneId) {
+        return sceneRouteData.computeIfAbsent(sceneId, k -> new Int2ObjectOpenHashMap<>());
     }
 }

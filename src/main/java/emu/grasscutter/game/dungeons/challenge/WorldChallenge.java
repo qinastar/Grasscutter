@@ -75,9 +75,9 @@ public class WorldChallenge {
             return;
         }
         finish(true);
-        this.getScene().getScriptManager().callEvent(EventType.EVENT_CHALLENGE_SUCCESS,
+        this.getScene().getScriptManager().callEvent(
                 // TODO record the time in PARAM2 and used in action
-                new ScriptArgs().setParam2(finishedTime));
+                new ScriptArgs(EventType.EVENT_CHALLENGE_SUCCESS).setParam2(finishedTime));
 
         challengeTriggers.forEach(t -> t.onFinish(this));
     }
@@ -87,7 +87,7 @@ public class WorldChallenge {
             return;
         }
         finish(false);
-        this.getScene().getScriptManager().callEvent(EventType.EVENT_CHALLENGE_FAIL, null);
+        this.getScene().getScriptManager().callEvent(new ScriptArgs(EventType.EVENT_CHALLENGE_FAIL));
         challengeTriggers.forEach(t -> t.onFinish(this));
     }
 

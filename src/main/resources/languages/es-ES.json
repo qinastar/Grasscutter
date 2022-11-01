@@ -84,6 +84,7 @@
         "artifactId": "ID de artefacto no válido.",
         "avatarId": "ID de avatar no válido.",
         "avatarLevel": "avatarLevel inválido.",
+        "cfgId": "🇺🇸Invalid cfg ID.",
         "entityId": "ID de entidad inválido.",
         "itemId": "ID de objeto inválido.",
         "itemLevel": "itemLevel inválido.",
@@ -151,6 +152,10 @@
       "in_dungeon_error": "Ya estás en esa mazmorra.",
       "description": "Te introduce en una mazmorra"
     },
+    "entity": {
+      "description": "🇺🇸Modify an existing entity's properties",
+      "not_found_error": "🇺🇸Entity does not exist"
+    },
     "give": {
       "usage_relic": "Uso: give <artifactID> [mainPropID] [<appendPropID>[,<veces>]]... [lv<nivel 0-20>]",
       "illegal_relic": "Este artifactID pertenece a un rango de la lista negra, puede que no sea el que buscas.",
@@ -215,7 +220,8 @@
       "finished": "Misión %s finalizada.",
       "not_found": "Misión no encontrada.",
       "invalid_id": "ID de misión inválido.",
-      "description": "Añade o finaliza misiones"
+      "description": "Añade o finaliza misiones",
+      "enabled": "Questing enabled."
     },
     "reload": {
       "reload_start": "Recargando configuración.",

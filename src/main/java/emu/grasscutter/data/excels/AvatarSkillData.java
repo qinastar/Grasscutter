@@ -10,7 +10,7 @@ import lombok.Getter;
 public class AvatarSkillData extends GameResource {
     private int id;
     @Getter private float cdTime;
-    @Getter private int costElemVal;
+    @Getter private float costElemVal; // fight prop update uses float
     @Getter private int maxChargeNum;
     @Getter private int triggerID;
     @Getter private boolean isAttackCameraLock;

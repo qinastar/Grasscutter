@@ -77,7 +77,7 @@ public class ScriptMonsterTideService {
             }
             // spawn the last turn of monsters
             // fix the 5-2
-            sceneScriptManager.callEvent(EventType.EVENT_MONSTER_TIDE_DIE, new ScriptArgs(monsterKillCount.get()));
+            sceneScriptManager.callEvent(new ScriptArgs(EventType.EVENT_MONSTER_TIDE_DIE, monsterKillCount.get()));
         }
 
     }

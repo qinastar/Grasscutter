@@ -3,6 +3,7 @@ package emu.grasscutter.game.activity;
 import com.esotericsoftware.reflectasm.ConstructorAccess;
 import emu.grasscutter.data.GameData;
 import emu.grasscutter.data.excels.ActivityData;
+import emu.grasscutter.game.activity.condition.ActivityConditionExecutor;
 import emu.grasscutter.game.player.Player;
 import emu.grasscutter.game.props.WatcherTriggerType;
 import emu.grasscutter.net.proto.ActivityInfoOuterClass;
@@ -68,7 +69,7 @@ public abstract class ActivityHandler {
         return playerActivityData;
     }
 
-    public ActivityInfoOuterClass.ActivityInfo toProto(PlayerActivityData playerActivityData){
+    public ActivityInfoOuterClass.ActivityInfo toProto(PlayerActivityData playerActivityData, ActivityConditionExecutor conditionExecutor){
         var proto = ActivityInfoOuterClass.ActivityInfo.newBuilder();
         proto.setActivityId(activityConfigItem.getActivityId())
             .setActivityType(activityConfigItem.getActivityType())
@@ -76,7 +77,7 @@ public abstract class ActivityHandler {
             .setBeginTime(DateHelper.getUnixTime(activityConfigItem.getBeginTime()))
             .setFirstDayStartTime(DateHelper.getUnixTime(activityConfigItem.getBeginTime()))
             .setEndTime(DateHelper.getUnixTime(activityConfigItem.getEndTime()))
-            .addAllMeetCondList(activityConfigItem.getMeetCondList());
+            .addAllMeetCondList(conditionExecutor.getMeetActivitiesConditions(activityConfigItem.getMeetCondList()));
 
         if (playerActivityData != null){
             proto.addAllWatcherInfoList(playerActivityData.getAllWatcherInfoList());

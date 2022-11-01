@@ -84,6 +84,7 @@
         "artifactId": "Błędne ID artefaktu.",
         "avatarId": "Błędne ID postaci.",
         "avatarLevel": "Błędny poziom postaci.",
+        "cfgId": "🇺🇸Invalid cfg ID.",
         "entityId": "Błędne ID obiektu.",
         "itemId": "Błędne ID przedmiotu.",
         "itemLevel": "Błędny poziom przedmiotu.",
@@ -151,6 +152,10 @@
       "in_dungeon_error": "Wskazany gracz już jest w tym lochu.",
       "description": "Zmień loch, w którym ma się znajdować wskazany gracz."
     },
+    "entity": {
+      "description": "🇺🇸Modify an existing entity's properties",
+      "not_found_error": "🇺🇸Entity does not exist"
+    },
     "give": {
       "usage_relic": "give <ID reliktu> [ID pierwszego przedmiotu] [<ID drugiego przedmiotu>[, <ile razy je połączyć>]]... [lv<poziom od 0 do 20>]",
       "illegal_relic": "Ten ID reliktu znajduje się na czarnej liście i może być nie tym, czego szukasz.",
@@ -215,7 +220,8 @@
       "finished": "Zadanie %s zostało zakończone.",
       "not_found": "Nie ma zadania o podanym ID.",
       "invalid_id": "Błędny format ID zadania.",
-      "description": "Dodaj lub wykonaj wskazane zadanie."
+      "description": "Dodaj lub wykonaj wskazane zadanie.",
+      "enabled": "Questing enabled."
     },
     "reload": {
       "reload_start": "Ponowne ładowanie konfiguracji...",

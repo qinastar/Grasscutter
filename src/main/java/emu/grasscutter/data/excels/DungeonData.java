@@ -3,51 +3,71 @@ package emu.grasscutter.data.excels;
 import emu.grasscutter.data.GameData;
 import emu.grasscutter.data.GameResource;
 import emu.grasscutter.data.ResourceType;
+import emu.grasscutter.game.dungeons.*;
+import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
+import lombok.Getter;
 
-import emu.grasscutter.game.props.SceneType;
+import java.util.List;
 
 @ResourceType(name = "DungeonExcelConfigData.json")
 public class DungeonData extends GameResource {
 	private int id;
-	private int sceneId;
-	private int showLevel;
-	private int passRewardPreviewID;
-	private String involveType; // TODO enum
-	
-	private RewardPreviewData previewData;
+	@Getter private int sceneId;
+	@Getter private int showLevel;
+    private DungeonType type;
+    private DungeonSubType subType;
+    private DungeonPlayType playType;
+    private DungeonInvolveType involveType;
+	@Getter private int limitLevel;
+	@Getter private int passCond;
+	@Getter private int reviveMaxCount;
+	@Getter private int settleCountdownTime;
+	@Getter private int failSettleCountdownTime;
+	@Getter private int quitSettleCountdownTime;
+	@Getter private List<SettleShowType> settleShows;
+	@Getter private int passRewardPreviewID;
+    @Getter private int statueCostID;
+    @Getter private int statueCostCount;
 
-	private int statueCostID;
-	private int statueCostCount;
-	    
+    @Getter private RewardPreviewData rewardPreviewData;
+
 	@Override
 	public int getId() {
 		return this.id;
 	}
 
-	public int getSceneId() {
-		return sceneId;
-	}
-	
-	public int getShowLevel() {
-		return showLevel;
-	}
+    public DungeonType getType() {
+        if (type == null) {
+            return DungeonType.DUNGEON_NONE;
+        }
+        return type;
+    }
 
-	public RewardPreviewData getRewardPreview() {
-		return previewData;
-	}
+    public DungeonSubType getSubType() {
+        if (subType == null) {
+            return DungeonSubType.DUNGEON_SUB_NONE;
+        }
+        return subType;
+    }
 
-	public int getStatueCostID() {
-		return statueCostID;
-	}
+    public DungeonPlayType getPlayType() {
+        if (playType == null) {
+            return DungeonPlayType.DUNGEON_PLAY_TYPE_NONE;
+        }
+        return playType;
+    }
 
-	public int getStatueCostCount() {
-		return statueCostCount;
-	}
+    public DungeonInvolveType getInvolveType() {
+        if (involveType == null) {
+            return DungeonInvolveType.INVOLVE_NONE;
+        }
+        return involveType;
+    }
 
 	@Override
 	public void onLoad() {
 		if (this.passRewardPreviewID > 0) {
-			this.previewData = GameData.getRewardPreviewDataMap().get(this.passRewardPreviewID);
+			this.rewardPreviewData = GameData.getRewardPreviewDataMap().get(this.passRewardPreviewID);
 		}
 	}
 }

@@ -4,23 +4,32 @@ import com.esotericsoftware.reflectasm.ConstructorAccess;
 import emu.grasscutter.Grasscutter;
 import emu.grasscutter.data.DataLoader;
 import emu.grasscutter.data.GameData;
+import emu.grasscutter.data.excels.ActivityCondExcelConfigData;
+import emu.grasscutter.game.activity.condition.*;
+import emu.grasscutter.game.activity.condition.all.UnknownActivityConditionHandler;
 import emu.grasscutter.game.player.BasePlayerManager;
 import emu.grasscutter.game.player.Player;
 import emu.grasscutter.game.props.ActivityType;
 import emu.grasscutter.game.props.WatcherTriggerType;
+import emu.grasscutter.game.quest.enums.LogicType;
 import emu.grasscutter.net.proto.ActivityInfoOuterClass;
 import emu.grasscutter.server.packet.send.PacketActivityScheduleInfoNotify;
+import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import lombok.Getter;
 import org.reflections.Reflections;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BooleanSupplier;
+import java.util.stream.Collectors;
 
 @Getter
 public class ActivityManager extends BasePlayerManager {
     private static final Map<Integer, ActivityConfigItem> activityConfigItemMap;
-    @Getter private static final Map<Integer, ActivityConfigItem> scheduleActivityConfigMap;
+    @Getter
+    private static final Map<Integer, ActivityConfigItem> scheduleActivityConfigMap;
     private final Map<Integer, PlayerActivityData> playerActivityDataMap;
+    private final ActivityConditionExecutor conditionExecutor;
 
     static {
         activityConfigItemMap = new HashMap<>();
@@ -55,7 +64,7 @@ public class ActivityManager extends BasePlayerManager {
 
                 if (activityHandlerType != null) {
                     activityHandler = (ActivityHandler) activityHandlerType.newInstance();
-                }else {
+                } else {
                     activityHandler = new DefaultActivityHandler();
                 }
                 activityHandler.setActivityConfigItem(item);
@@ -90,6 +99,11 @@ public class ActivityManager extends BasePlayerManager {
         });
 
         player.sendPacket(new PacketActivityScheduleInfoNotify(activityConfigItemMap.values()));
+
+        conditionExecutor = new BasicActivityConditionExecutor(activityConfigItemMap,
+            GameData.getActivityCondExcelConfigDataMap(),
+            PlayerActivityDataMappingBuilder.buildPlayerActivityDataByActivityCondId(playerActivityDataMap),
+            AllActivityConditionBuilder.buildActivityConditions());
     }
 
     /**
@@ -110,11 +124,32 @@ public class ActivityManager extends BasePlayerManager {
             params));
     }
 
+    public boolean isActivityActive(int activityId) {
+        var activityConfig = activityConfigItemMap.get(activityId);
+        if (activityConfig == null) {
+            return false;
+        }
+        var now = new Date();
+        return now.after(activityConfig.getBeginTime()) && now.before(activityConfig.getEndTime());
+    }
+
+    public boolean hasActivityEnded(int activityId) {
+        var activityConfig = activityConfigItemMap.get(activityId);
+        if (activityConfig == null) {
+            return true;
+        }
+        return new Date().after(activityConfig.getEndTime());
+    }
+
+    public boolean meetsCondition(int activityCondId) {
+        return conditionExecutor.meetsCondition(activityCondId);
+    }
+
     public ActivityInfoOuterClass.ActivityInfo getInfoProtoByActivityId(int activityId) {
         var activityHandler = activityConfigItemMap.get(activityId).getActivityHandler();
         var activityData = playerActivityDataMap.get(activityId);
 
-        return activityHandler.toProto(activityData);
+        return activityHandler.toProto(activityData, conditionExecutor);
     }
 
     public Optional<ActivityHandler> getActivityHandler(ActivityType type) {

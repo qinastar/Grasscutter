@@ -4,7 +4,9 @@ import com.google.gson.annotations.SerializedName;
 import emu.grasscutter.Grasscutter;
 import emu.grasscutter.data.binout.*;
 import emu.grasscutter.data.binout.AbilityModifier.AbilityModifierAction;
+import emu.grasscutter.data.binout.routes.SceneRoutes;
 import emu.grasscutter.data.common.PointData;
+import emu.grasscutter.game.dungeons.DungeonDrop;
 import emu.grasscutter.game.managers.blossom.BlossomConfig;
 import emu.grasscutter.game.quest.QuestEncryptionKey;
 import emu.grasscutter.game.world.SpawnDataEntry;
@@ -66,9 +68,11 @@ public class ResourceLoader {
         GameDepot.load();
         // Load spawn data and quests
         loadGadgetConfigData();
+        loadSceneRoutes();
         loadSpawnData();
         loadQuests();
         loadScriptSceneData();
+        loadDungeonDrops();
         // Load scene points - must be done AFTER resources are loaded
         loadScenePoints();
         // Load default home layout
@@ -326,6 +330,18 @@ public class ResourceLoader {
         GameDepot.addSpawnListById(areaSort);
     }
 
+    private static void loadDungeonDrops(){
+        try {
+            DataLoader.loadList("DungeonDrop.json", DungeonDrop.class).forEach(entry -> {
+                GameData.getDungeonDropDataMap().put(entry.getDungeonId(), entry.getDrops());
+            });
+            Grasscutter.getLogger().debug("Loaded {} dungeon drop data entries.", GameData.getDungeonDropDataMap().size());
+        }
+        catch (Exception ex) {
+            Grasscutter.getLogger().error("Unable to load dungeon drop data.", ex);
+        }
+    }
+
     private static void loadOpenConfig() {
         // Read from cached file if exists
         List<OpenConfigEntry> list = null;
@@ -462,13 +478,34 @@ public class ResourceLoader {
                     GameData.getGadgetConfigData().putAll(JsonUtils.loadToMap(path, String.class, ConfigGadget.class));
                 } catch (Exception e) {
                     Grasscutter.getLogger().error("failed to load ConfigGadget entries for " + path.toString(), e);
-                    return;
                 }
             });
 
             Grasscutter.getLogger().debug("Loaded {} ConfigGadget entries.", GameData.getGadgetConfigData().size());
         } catch (IOException e) {
             Grasscutter.getLogger().error("Failed to load ConfigGadget folder.");
+        }
+    }
+
+    private static void loadSceneRoutes() {
+        try {
+            Files.newDirectoryStream(getResourcePath("BinOutput/LevelDesign/Routes/"), "*.json").forEach(path -> {
+                try {
+                    val sceneRoutes = JsonUtils.loadToClass(path, SceneRoutes.class);
+                    val sceneRoutesMap = GameData.getSceneRoutes(sceneRoutes.getSceneId());
+                    if(sceneRoutes.getRoutes() == null){
+                        Grasscutter.getLogger().info("No routes found for scene {}", sceneRoutes.getSceneId());
+                        return;
+                    }
+                    Arrays.stream(sceneRoutes.getRoutes()).forEach(r -> sceneRoutesMap.put(r.getLocalId(), r));
+                } catch (Exception e) {
+                    Grasscutter.getLogger().error("failed to load scene routes for " + path.toString(), e);
+                }
+            });
+
+            Grasscutter.getLogger().debug("Loaded SceneRoutes for {} scenes.", GameData.getGadgetConfigData().size());
+        } catch (IOException e) {
+            Grasscutter.getLogger().error("Failed to load SceneRoutes folder.");
         }
     }
 

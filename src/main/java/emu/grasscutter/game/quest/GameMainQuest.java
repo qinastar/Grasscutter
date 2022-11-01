@@ -1,43 +1,39 @@
 package emu.grasscutter.game.quest;
 
-import java.util.*;
-
-import emu.grasscutter.Grasscutter;
-import emu.grasscutter.data.binout.ScriptSceneData;
-import emu.grasscutter.data.excels.QuestData;
-import emu.grasscutter.game.quest.enums.LogicType;
-import emu.grasscutter.game.quest.enums.QuestTrigger;
-import emu.grasscutter.scripts.ScriptLoader;
-import emu.grasscutter.server.packet.send.PacketCodexDataUpdateNotify;
-import emu.grasscutter.utils.Position;
-import lombok.Getter;
-import org.bson.types.ObjectId;
-
 import dev.morphia.annotations.Entity;
 import dev.morphia.annotations.Id;
 import dev.morphia.annotations.Indexed;
 import dev.morphia.annotations.Transient;
+import emu.grasscutter.Grasscutter;
 import emu.grasscutter.data.GameData;
 import emu.grasscutter.data.binout.MainQuestData;
-import emu.grasscutter.data.binout.MainQuestData.*;
+import emu.grasscutter.data.binout.MainQuestData.SubQuestData;
+import emu.grasscutter.data.binout.MainQuestData.TalkData;
+import emu.grasscutter.data.binout.ScriptSceneData;
+import emu.grasscutter.data.excels.QuestData;
 import emu.grasscutter.data.excels.RewardData;
 import emu.grasscutter.database.DatabaseHelper;
 import emu.grasscutter.game.player.Player;
 import emu.grasscutter.game.props.ActionReason;
+import emu.grasscutter.game.quest.enums.LogicType;
 import emu.grasscutter.game.quest.enums.ParentQuestState;
 import emu.grasscutter.game.quest.enums.QuestState;
+import emu.grasscutter.game.quest.enums.QuestTrigger;
 import emu.grasscutter.net.proto.ChildQuestOuterClass.ChildQuest;
 import emu.grasscutter.net.proto.ParentQuestOuterClass.ParentQuest;
-import emu.grasscutter.net.proto.QuestOuterClass.Quest;
+import emu.grasscutter.scripts.ScriptLoader;
+import emu.grasscutter.server.packet.send.PacketCodexDataUpdateNotify;
 import emu.grasscutter.server.packet.send.PacketFinishedParentQuestUpdateNotify;
 import emu.grasscutter.server.packet.send.PacketQuestListUpdateNotify;
 import emu.grasscutter.server.packet.send.PacketQuestProgressUpdateNotify;
+import emu.grasscutter.utils.Position;
+import lombok.Data;
+import lombok.Getter;
+import org.bson.types.ObjectId;
 
 import javax.script.Bindings;
 import javax.script.CompiledScript;
-import javax.script.ScriptException;
-
-import static emu.grasscutter.config.Configuration.SCRIPT;
+import java.util.*;
 
 @Entity(value = "quests", useDiscriminator = false)
 public class GameMainQuest {
@@ -88,6 +84,12 @@ public class GameMainQuest {
         }
     }
 
+    public Collection<GameQuest> getActiveQuests(){
+        return childQuests.values().stream()
+            .filter(q->q.getState().getValue() == QuestState.UNFINISHED.getValue())
+            .toList();
+    }
+
     public void setOwner(Player player) {
         if (player.getUid() != this.getOwnerUid()) return;
         this.owner = player;
@@ -123,8 +125,35 @@ public class GameMainQuest {
     }
 
     public void finish() {
+        // Avoid recursion from child finish() in GameQuest
+        // when auto finishing all child quests with QUEST_STATE_UNFINISHED (below)
+        if (this.isFinished) {
+            Grasscutter.getLogger().debug("Skip main quest finishing because it's already finished");
+            return;
+        }
+
         this.isFinished = true;
         this.state = ParentQuestState.PARENT_QUEST_STATE_FINISHED;
+
+         /*
+            We also need to check for unfinished childQuests in this MainQuest
+            force them to complete and send a packet about this to the user,
+            because at some points there are special "invisible" child quests that control
+            some situations.
+
+            For example, subQuest 35312 is responsible for the event of leaving the territory
+            of the island with a statue and automatically returns the character back,
+            quest 35311 completes the main quest line 353 and starts 35501 from
+            new MainQuest 355 but if 35312 is not completed after the completion
+            of the main quest 353 - the character will not be able to leave place
+            (return again and again)
+            */
+        this
+            .getChildQuests()
+            .values()
+            .stream()
+            .filter(p -> p.state != QuestState.QUEST_STATE_FINISHED)
+            .forEach(GameQuest::finish);
 
         this.getOwner().getSession().send(new PacketFinishedParentQuestUpdateNotify(this));
         this.getOwner().getSession().send(new PacketCodexDataUpdateNotify(this));
@@ -133,14 +162,16 @@ public class GameMainQuest {
 
         // Add rewards
         MainQuestData mainQuestData = GameData.getMainQuestDataMap().get(this.getParentQuestId());
-        for (int rewardId : mainQuestData.getRewardIdList()) {
-            RewardData rewardData = GameData.getRewardDataMap().get(rewardId);
+        if(mainQuestData.getRewardIdList()!=null) {
+            for (int rewardId : mainQuestData.getRewardIdList()) {
+                RewardData rewardData = GameData.getRewardDataMap().get(rewardId);
 
-            if (rewardData == null) {
-                continue;
+                if (rewardData == null) {
+                    continue;
+                }
+
+                getOwner().getInventory().addItemParamDatas(rewardData.getRewardItemList(), ActionReason.QuestReward);
             }
-
-            getOwner().getInventory().addItemParamDatas(rewardData.getRewardItemList(), ActionReason.QuestReward);
         }
 
         // handoff main quest
@@ -153,40 +184,71 @@ public class GameMainQuest {
     public void fail() {}
     public void cancel() {}
 
-    // Rewinds to the last finished/unfinished rewind quest, and returns the avatar rewind position (if it exists)
-    public List<Position> rewind() {
-        if (this.questManager == null) {
-            this.questManager = getOwner().getQuestManager();
+
+    public List<Position> rewindTo(GameQuest targetQuest, boolean notifyDelete){
+        if(targetQuest == null || !targetQuest.rewind(notifyDelete)){
+            return null;
         }
-        List<GameQuest> sortedByOrder = new ArrayList<>(getChildQuests().values().stream().filter(q -> q.getQuestData().isRewind()).toList());
-        sortedByOrder.sort((a,b) -> {
-            if ( a == b) {
-                return 0;
-            }
-            return a.getQuestData().getOrder() > b.getQuestData().getOrder() ? 1 : -1;});
-        boolean didRewind = false;
-        for (GameQuest quest : sortedByOrder) {
-            int i = sortedByOrder.indexOf(quest);
-            if ( (i+1) >= sortedByOrder.size()) {
-                didRewind = quest.rewind(null);
-            } else {
-                didRewind = quest.rewind(sortedByOrder.get(i+1));
-            }
-            if (didRewind) {
-                break;
-            }
+
+        /*if(rewindPositions.isEmpty()){
+            addRewindPoints();
+        }*/
+
+        if(rewindPositions.containsKey(targetQuest.getSubQuestId())){
+            List<Position> posAndRot = new ArrayList<>();
+            posAndRot.add(0,rewindPositions.get(targetQuest.getSubQuestId()));
+            posAndRot.add(1,rewindRotations.get(targetQuest.getSubQuestId()));
+            return posAndRot;
         }
+
         List<GameQuest> rewindQuests = getChildQuests().values().stream()
-            .filter(p -> (p.getState() == QuestState.QUEST_STATE_UNFINISHED || p.getState() == QuestState.QUEST_STATE_FINISHED) && p.getQuestData().isRewind()).toList();
+            .filter(p -> (p.getState() == QuestState.QUEST_STATE_UNFINISHED || p.getState() == QuestState.QUEST_STATE_FINISHED) &&
+                p.getQuestData() != null && p.getQuestData().isRewind()).toList();
+
         for (GameQuest quest : rewindQuests) {
             if (rewindPositions.containsKey(quest.getSubQuestId())) {
                 List<Position> posAndRot = new ArrayList<>();
                 posAndRot.add(0,rewindPositions.get(quest.getSubQuestId()));
                 posAndRot.add(1,rewindRotations.get(quest.getSubQuestId()));
-                  return posAndRot;
+                return posAndRot;
             }
+
         }
         return null;
+    }
+
+    // Rewinds to the last finished/unfinished rewind quest, and returns the avatar rewind position (if it exists)
+    public List<Position> rewind() {
+        if (this.questManager == null) {
+            this.questManager = getOwner().getQuestManager();
+        }
+        var activeQuests = getActiveQuests();
+        var highestActiveQuest = activeQuests.stream()
+            .filter(q -> q.getQuestData() != null)
+            .max(Comparator.comparing(q -> q.getQuestData().getOrder()))
+            .orElse(null);
+
+        if (highestActiveQuest == null) {
+            var firstUnstarted = getChildQuests().values().stream()
+                .filter(q -> q.getQuestData() != null && q.getState().getValue() != QuestState.FINISHED.getValue())
+                .min(Comparator.comparingInt(a -> a.getQuestData().getOrder()));
+            if(firstUnstarted.isEmpty()){
+                // all quests are probably finished, do don't rewind and maybe also set the mainquest to finished?
+                return null;
+            }
+            highestActiveQuest = firstUnstarted.get();
+            //todo maybe try to accept quests if there is no active quest and no rewind target?
+            //tryAcceptSubQuests(QuestTrigger.QUEST_COND_NONE, "", 0);
+        }
+
+        var highestOrder = highestActiveQuest.getQuestData().getOrder();
+        var rewindTarget = getChildQuests().values().stream()
+            .filter(q -> q.getQuestData() != null)
+            .filter(q -> q.getQuestData().isRewind() && q.getQuestData().getOrder() <= highestOrder)
+            .max(Comparator.comparingInt(a -> a.getQuestData().getOrder()))
+            .orElse(null);
+
+        return rewindTo(rewindTarget!=null? rewindTarget : highestActiveQuest, false);
     }
     public void addRewindPoints() {
         Bindings bindings = ScriptLoader.getEngine().createBindings();
@@ -237,16 +299,24 @@ public class GameMainQuest {
                 }
             }
 
-        } catch (ScriptException e) {
-            Grasscutter.getLogger().error("An error occurred while loading rewind positions");
+        } catch (Throwable e) {
+            Grasscutter.getLogger().error("An error occurred while loading rewind positions for {}", getParentQuestId());
+        }
+    }
+
+    public void checkProgress(){
+        for (var quest : getChildQuests().values()){
+            if(quest.getState() == QuestState.QUEST_STATE_UNFINISHED) {
+                questManager.checkQuestAlreadyFullfilled(quest);
+            }
         }
     }
 
     public void tryAcceptSubQuests(QuestTrigger condType, String paramStr, int... params) {
         try {
             List<GameQuest> subQuestsWithCond = getChildQuests().values().stream()
-                .filter(p -> p.getState() == QuestState.QUEST_STATE_UNSTARTED)
-                .filter(p -> p.getQuestData().getAcceptCond().stream().anyMatch(q -> q.getType() == condType))
+                .filter(p -> p.getState() == QuestState.QUEST_STATE_UNSTARTED || p.getState() == QuestState.UNFINISHED)
+                .filter(p -> p.getQuestData().getAcceptCond().stream().anyMatch(q -> condType == QuestTrigger.QUEST_COND_NONE || q.getType() == condType))
                 .toList();
 
             for (GameQuest subQuestWithCond : subQuestsWithCond) {
@@ -261,11 +331,8 @@ public class GameMainQuest {
 
                 boolean shouldAccept = LogicType.calculate(subQuestWithCond.getQuestData().getAcceptCondComb(), accept);
 
-                if (shouldAccept) {
+                if (shouldAccept)
                     subQuestWithCond.start();
-                    getQuestManager().getAddToQuestListUpdateNotify().add(subQuestWithCond);
-                }
-
             }
             this.save();
         } catch (Exception e) {
@@ -297,10 +364,8 @@ public class GameMainQuest {
 
                 boolean shouldFail = LogicType.calculate(subQuestWithCond.getQuestData().getFailCondComb(), subQuestWithCond.getFailProgressList());
 
-                if (shouldFail) {
+                if (shouldFail)
                     subQuestWithCond.fail();
-                    getQuestManager().getAddToQuestListUpdateNotify().add(subQuestWithCond);
-                }
             }
 
         } catch (Exception e) {
@@ -332,10 +397,8 @@ public class GameMainQuest {
 
                 boolean shouldFinish = LogicType.calculate(subQuestWithCond.getQuestData().getFinishCondComb(), subQuestWithCond.getFinishProgressList());
 
-                if (shouldFinish) {
+                if (shouldFinish)
                     subQuestWithCond.finish();
-                    getQuestManager().getAddToQuestListUpdateNotify().add(subQuestWithCond);
-                }
             }
         } catch (Exception e) {
             Grasscutter.getLogger().debug("An error occurred while trying to finish quest.", e);
@@ -350,13 +413,13 @@ public class GameMainQuest {
         DatabaseHelper.deleteQuest(this);
     }
 
-    public ParentQuest toProto() {
+    public ParentQuest toProto(boolean withChildQuests) {
         ParentQuest.Builder proto = ParentQuest.newBuilder()
                 .setParentQuestId(getParentQuestId())
-                .setIsFinished(isFinished());
-
-            proto.setParentQuestState(getState().getValue())
+                .setIsFinished(isFinished())
+                .setParentQuestState(getState().getValue())
                 .setCutsceneEncryptionKey(QuestManager.getQuestKey(parentQuestId));
+        if(withChildQuests) {
             for (GameQuest quest : this.getChildQuests().values()) {
                 if (quest.getState() != QuestState.QUEST_STATE_UNSTARTED) {
                     ChildQuest childQuest = ChildQuest.newBuilder()
@@ -367,6 +430,7 @@ public class GameMainQuest {
                     proto.addChildQuestList(childQuest);
                 }
             }
+        }
 
         for (int i : getQuestVars()) {
             proto.addQuestVar(i);

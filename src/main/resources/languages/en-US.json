@@ -84,6 +84,7 @@
         "artifactId": "Invalid artifact ID.",
         "avatarId": "Invalid avatar ID.",
         "avatarLevel": "Invalid avatarLevel.",
+        "cfgId": "Invalid cfg ID.",
         "entityId": "Invalid entity ID.",
         "itemId": "Invalid item ID.",
         "itemLevel": "Invalid itemLevel.",
@@ -151,6 +152,10 @@
       "in_dungeon_error": "You are already in that dungeon.",
       "description": "Enter a dungeon"
     },
+    "entity": {
+      "description": "Modify an existing entity's properties",
+      "not_found_error": "Entity does not exist"
+    },
     "give": {
       "usage_relic": "Usage: give <artifactID> [mainPropID] [<appendPropID>[,<times>]]... [lv<level 0-20>]",
       "illegal_relic": "This artifactID belongs to a blacklisted range, it may not be the one you wanted.",
@@ -215,7 +220,8 @@
       "finished": "Finished quest %s.",
       "not_found": "Quest not found.",
       "invalid_id": "Invalid quest ID.",
-      "description": "Add or finish quests"
+      "description": "Add or finish quests",
+      "enabled": "Questing enabled."
     },
     "reload": {
       "reload_start": "Reloading config.",

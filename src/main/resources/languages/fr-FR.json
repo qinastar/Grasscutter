@@ -84,6 +84,7 @@
         "artifactId": "ID de l'artéfact invalide.",
         "avatarId": "ID de l'avatar invalide.",
         "avatarLevel": "avatarLevel invalide.",
+        "cfgId": "🇺🇸Invalid cfg ID.",
         "entityId": "ID de l'entité invalide.",
         "itemId": "ID de l'objet invalide.",
         "itemLevel": "Niveau de l'objet invalide.",
@@ -151,6 +152,10 @@
       "in_dungeon_error": "Vous êtes déjà dans ce donjon.",
       "description": "Entrer dans un donjon"
     },
+    "entity": {
+      "description": "🇺🇸Modify an existing entity's properties",
+      "not_found_error": "🇺🇸Entity does not exist"
+    },
     "give": {
       "usage_relic": "Utilisation: give <artifactID> [mainPropID] [<appendPropID>[,<times>]]... [lv<level 0-20>]",
       "illegal_relic": "L'ID de cet artéfact appartient a une liste blacklistée, ce n'est peut-être pas celui que vous désirez.",
@@ -215,7 +220,8 @@
       "finished": "Quête terminée : %s.",
       "not_found": "Quête introuvable.",
       "invalid_id": "ID de la quête invalide.",
-      "description": "Ajoute ou termine une quête"
+      "description": "Ajoute ou termine une quête",
+      "enabled": "Quêtes activées."
     },
     "reload": {
       "reload_start": "Rechargement de la configuration.",

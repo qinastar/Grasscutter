@@ -225,6 +225,7 @@ public class ConfigContainer {
         public boolean fishhookTeleport = true;
         public ResinOptions resinOptions = new ResinOptions();
         public Rates rates = new Rates();
+        public boolean questing = false;
 
         public static class InventoryLimits {
             public int weapons = 2000;

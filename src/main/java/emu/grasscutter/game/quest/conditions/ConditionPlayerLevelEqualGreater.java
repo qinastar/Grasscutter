@@ -11,7 +11,7 @@ public class ConditionPlayerLevelEqualGreater extends QuestBaseHandler {
 
 	@Override
 	public boolean execute(GameQuest quest, QuestCondition condition, String paramStr, int... params) {
-		return quest.getOwner().getLevel() >= params[0];
+		return quest.getOwner().getLevel() >= condition.getParam()[0];
 	}
 
 }

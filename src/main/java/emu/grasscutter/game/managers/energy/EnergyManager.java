@@ -382,12 +382,22 @@ public class EnergyManager extends BasePlayerManager {
         return this.energyUsage;
     }
 
+    public boolean refillEntityAvatarEnergy () {
+        EntityAvatar activeEntity = this.player.getTeamManager().getCurrentAvatarEntity();
+        return activeEntity.addEnergy(activeEntity.getAvatar().getSkillDepot().getEnergySkillData().getCostElemVal());
+    }
+    
+    public void refillTeamEnergy (PropChangeReason changeReason, boolean isFlat) {
+        for (EntityAvatar entityAvatar : this.player.getTeamManager().getActiveTeam()) {
+            // giving the exact amount read off the AvatarSkillData.json
+            entityAvatar.addEnergy(entityAvatar.getAvatar().getSkillDepot().getEnergySkillData().getCostElemVal(), changeReason, isFlat);
+        }
+    }
+
     public void setEnergyUsage(boolean energyUsage) {
         this.energyUsage = energyUsage;
         if (!energyUsage) {  // Refill team energy if usage is disabled
-            for (EntityAvatar entityAvatar : this.player.getTeamManager().getActiveTeam()) {
-                entityAvatar.addEnergy(1000, PropChangeReason.PROP_CHANGE_REASON_GM,true);
-            }
+            refillTeamEnergy(PropChangeReason.PROP_CHANGE_REASON_GM, true);
         }
     }
 }

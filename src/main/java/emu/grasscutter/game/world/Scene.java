@@ -4,8 +4,11 @@ import emu.grasscutter.Grasscutter;
 import emu.grasscutter.data.GameData;
 import emu.grasscutter.data.GameDepot;
 import emu.grasscutter.data.binout.SceneNpcBornEntry;
+import emu.grasscutter.data.binout.routes.Route;
 import emu.grasscutter.data.excels.*;
 import emu.grasscutter.game.avatar.Avatar;
+import emu.grasscutter.game.dungeons.DungeonManager;
+import emu.grasscutter.game.dungeons.DungeonPassConditionType;
 import emu.grasscutter.game.dungeons.DungeonSettleListener;
 import emu.grasscutter.game.entity.*;
 import emu.grasscutter.game.entity.gadget.GadgetWorktop;
@@ -23,18 +26,23 @@ import emu.grasscutter.net.proto.SelectWorktopOptionReqOuterClass;
 import emu.grasscutter.net.proto.VisionTypeOuterClass.VisionType;
 import emu.grasscutter.scripts.SceneIndexManager;
 import emu.grasscutter.scripts.SceneScriptManager;
+import emu.grasscutter.scripts.constants.EventType;
 import emu.grasscutter.scripts.data.SceneBlock;
 import emu.grasscutter.scripts.data.SceneGadget;
 import emu.grasscutter.scripts.data.SceneGroup;
+import emu.grasscutter.scripts.data.ScriptArgs;
 import emu.grasscutter.server.packet.send.*;
 import emu.grasscutter.utils.Position;
+import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import lombok.Getter;
 import lombok.Setter;
 
+import javax.annotation.Nullable;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Collectors;
+
 
 public class Scene {
     @Getter private final World world;
@@ -48,17 +56,22 @@ public class Scene {
     private Set<SpawnDataEntry.GridBlockId> loadedGridBlocks;
     @Getter @Setter private boolean dontDestroyWhenEmpty;
 
-    @Getter @Setter private int autoCloseTime;
     @Getter private int time;
     private long startTime;
 
     @Getter private SceneScriptManager scriptManager;
     @Getter @Setter private WorldChallenge challenge;
     @Getter private List<DungeonSettleListener> dungeonSettleListeners;
-    @Getter private DungeonData dungeonData;
+    @Getter @Setter DungeonManager dungeonManager;
     @Getter @Setter private int prevScene; // Id of the previous scene
     @Getter @Setter private int prevScenePoint;
+    @Getter @Setter private int killedMonsterCount;
+    @Getter Int2ObjectMap<Route> sceneRoutes;
     private Set<SceneNpcBornEntry> npcBornEntrySet;
+    private final HashSet<Integer> unlockedForces;
+    @Getter private boolean finishedLoading = false;
+    private final List<Runnable> afterLoadedCallbacks = new ArrayList<>();
+
     public Scene(World world, SceneData sceneData) {
         this.world = world;
         this.sceneData = sceneData;
@@ -68,6 +81,7 @@ public class Scene {
         this.time = 8 * 60;
         this.startTime = System.currentTimeMillis();
         this.prevScene = 3;
+        this.sceneRoutes = GameData.getSceneRoutes(getId());
 
         this.spawnedEntities = ConcurrentHashMap.newKeySet();
         this.deadSpawnedEntities = ConcurrentHashMap.newKeySet();
@@ -76,6 +90,7 @@ public class Scene {
         this.npcBornEntrySet = ConcurrentHashMap.newKeySet();
         this.scriptManager = new SceneScriptManager(this);
         this.blossomManager = new BlossomManager(this);
+        this.unlockedForces = new HashSet<>();
     }
 
     public int getId() {
@@ -101,6 +116,11 @@ public class Scene {
                 .orElse(null);
     }
 
+    @Nullable
+    public Route getSceneRouteById(int routeId){
+        return sceneRoutes.get(routeId);
+    }
+
     public void changeTime(int time) {
         this.time = time % 1440;
     }
@@ -109,18 +129,18 @@ public class Scene {
         return (int) (System.currentTimeMillis() - this.startTime);
     }
 
-    public void setDungeonData(DungeonData dungeonData) {
-        if (dungeonData == null || this.dungeonData != null || this.getSceneType() != SceneType.SCENE_DUNGEON || dungeonData.getSceneId() != this.getId()) {
-            return;
-        }
-        this.dungeonData = dungeonData;
-    }
-
     public void addDungeonSettleObserver(DungeonSettleListener dungeonSettleListener) {
         if (dungeonSettleListeners == null) {
             dungeonSettleListeners = new ArrayList<>();
         }
         dungeonSettleListeners.add(dungeonSettleListener);
+    }
+
+    public void triggerDungeonEvent(DungeonPassConditionType conditionType, int... params){
+        if(dungeonManager==null){
+            return;
+        }
+        dungeonManager.triggerEvent(conditionType, params);
     }
 
     public boolean isInScene(GameEntity entity) {
@@ -342,11 +362,13 @@ public class Scene {
 
         // Death event
         target.onDeath(attackerId);
+        triggerDungeonEvent(DungeonPassConditionType.DUNGEON_COND_KILL_MONSTER_COUNT, ++killedMonsterCount);
     }
 
     public void onTick() {
         // disable script for home
         if (this.getSceneType() == SceneType.SCENE_HOME_WORLD || this.getSceneType() == SceneType.SCENE_HOME_ROOM) {
+            finishLoading();
             return;
         }
         if (this.getScriptManager().isInit()) {
@@ -365,6 +387,24 @@ public class Scene {
         blossomManager.onTick();
 
         checkNpcGroup();
+        finishLoading();
+    }
+
+    public void finishLoading(){
+        if(finishedLoading){
+            return;
+        }
+        this.finishedLoading = true;
+        afterLoadedCallbacks.forEach(Runnable::run);
+        afterLoadedCallbacks.clear();
+    }
+
+    public void runWhenFinished(Runnable runnable){
+        if(isFinishedLoading()){
+            runnable.run();
+            return;
+        }
+        afterLoadedCallbacks.add(runnable);
     }
 
     public int getEntityLevel(int baseLevel, int worldLevelOverride) {
@@ -611,8 +651,7 @@ public class Scene {
         }
 
         scriptManager.meetEntities(entities);
-        //scriptManager.callEvent(EventType.EVENT_GROUP_LOAD, null);
-        //groups.forEach(g -> scriptManager.callEvent(EventType.EVENT_GROUP_LOAD, null));
+        groups.forEach(g -> scriptManager.callEvent(new ScriptArgs(EventType.EVENT_GROUP_LOAD, g.id)));
         Grasscutter.getLogger().info("Scene {} loaded {} group(s)", this.getId(), groups.size());
     }
 
@@ -756,6 +795,16 @@ public class Scene {
             }
             scriptManager.addGroupSuite(group, suite);
         });
+    }
+
+    public void unlockForce(int force){
+        unlockedForces.add(force);
+        broadcastPacket(new PacketSceneForceUnlockNotify(force, true));
+    }
+
+    public void lockForce(int force){
+        unlockedForces.remove(force);
+        broadcastPacket(new PacketSceneForceLockNotify(force));
     }
 
     public void selectWorktopOptionWith(SelectWorktopOptionReqOuterClass.SelectWorktopOptionReq req) {

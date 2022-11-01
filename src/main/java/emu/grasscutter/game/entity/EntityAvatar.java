@@ -162,9 +162,22 @@ public class EntityAvatar extends GameEntity {
         }
     }
 
+    // for single entity avatar only I guess
+    public boolean addEnergy(float amount) {
+        FightProperty curEnergyProp = this.getAvatar().getSkillDepot().getElementType().getCurEnergyProp();
+        float curEnergy = this.getFightProperty(curEnergyProp);
+        if (curEnergy == amount){
+            return false;
+        }
+        this.getAvatar().setCurrentEnergy(curEnergyProp, amount);
+        this.getScene().broadcastPacket(new PacketEntityFightPropUpdateNotify(this, curEnergyProp));
+        return true;
+    }
+
     public void addEnergy(float amount, PropChangeReason reason) {
         this.addEnergy(amount, reason, false);
     }
+    
     public void addEnergy(float amount, PropChangeReason reason, boolean isFlat) {
         // Get current and maximum energy for this avatar.
         FightProperty curEnergyProp = this.getAvatar().getSkillDepot().getElementType().getCurEnergyProp();
@@ -188,6 +201,8 @@ public class EntityAvatar extends GameEntity {
         if (newEnergy != curEnergy) {
             this.avatar.setCurrentEnergy(curEnergyProp, newEnergy);
 
+            // I only see EntityFightPropUpdataNotify being sent by the official server, and without any prop reason, 
+            // not sure how that differs to this 
             this.getScene().broadcastPacket(new PacketAvatarFightPropUpdateNotify(this.getAvatar(), curEnergyProp));
             this.getScene().broadcastPacket(new PacketEntityFightPropChangeReasonNotify(this, curEnergyProp, newEnergy, reason));
         }

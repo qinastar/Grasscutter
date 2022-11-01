@@ -11,29 +11,35 @@ import static emu.grasscutter.utils.Language.translate;
 
 @Command(label = "quest",
          aliases = {"q"},
-         usage = {"(add|finish) [<questId>]"},
+         usage = {"(add|finish) [<questId>]", "enable"},
          permission = "player.quest",
          permissionTargeted = "player.quest.others")
 public final class QuestCommand implements CommandHandler {
 
     @Override
     public void execute(Player sender, Player targetPlayer, List<String> args) {
-        if (args.size() != 2) {
+        if (args.size() == 0) {
             sendUsageMessage(sender);
             return;
         }
+        String cmd = args.remove(0).toLowerCase();
 
-        String cmd = args.get(0).toLowerCase();
-        int questId;
-
-        try {
-            questId = Integer.parseInt(args.get(1));
-        } catch (Exception e) {
-            CommandHandler.sendMessage(sender, translate(sender, "commands.quest.invalid_id"));
-            return;
+        int questId = 0;
+        if (args.size() == 1) {
+            try {
+                questId = Integer.parseInt(args.get(0));
+            }
+            catch (Exception e) {
+                CommandHandler.sendMessage(sender, translate(sender, "commands.quest.invalid_id"));
+                return;
+            }
         }
 
         switch (cmd) {
+            case "enable" -> {
+                targetPlayer.getQuestManager().enableQuests();
+                CommandHandler.sendMessage(sender, translate(sender, "commands.quest.enabled"));
+            }
             case "add" -> {
                 GameQuest quest = targetPlayer.getQuestManager().addQuest(questId);
 

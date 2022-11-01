@@ -1,32 +1,38 @@
 package emu.grasscutter.game.quest;
 
-import java.beans.Transient;
 import java.util.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import emu.grasscutter.Grasscutter;
 import emu.grasscutter.data.GameData;
 import emu.grasscutter.data.binout.MainQuestData;
 import emu.grasscutter.data.excels.QuestData;
-import emu.grasscutter.data.excels.QuestData.QuestCondition;
 import emu.grasscutter.database.DatabaseHelper;
 import emu.grasscutter.game.player.BasePlayerManager;
 import emu.grasscutter.game.player.Player;
 import emu.grasscutter.game.quest.enums.ParentQuestState;
 import emu.grasscutter.game.quest.enums.QuestTrigger;
-import emu.grasscutter.game.quest.enums.LogicType;
 import emu.grasscutter.game.quest.enums.QuestState;
 import emu.grasscutter.server.packet.send.*;
 import emu.grasscutter.utils.Position;
+import io.netty.util.concurrent.FastThreadLocalThread;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
-import jdk.jshell.spi.ExecutionControl;
 import lombok.Getter;
 
 public class QuestManager extends BasePlayerManager {
 
     @Getter private final Player player;
     @Getter private final Int2ObjectMap<GameMainQuest> mainQuests;
-    @Getter private List<GameQuest> addToQuestListUpdateNotify;
+    public static final ExecutorService eventExecutor;
+    static {
+        eventExecutor = new ThreadPoolExecutor(4, 4,
+            60, TimeUnit.SECONDS, new LinkedBlockingDeque<>(1000),
+            FastThreadLocalThread::new, new ThreadPoolExecutor.AbortPolicy());
+    }
     /*
         On SetPlayerBornDataReq, the server sends FinishedParentQuestNotify, with this exact
         parentQuestList. Captured on Game version 2.7
@@ -62,7 +68,7 @@ public class QuestManager extends BasePlayerManager {
 
     */
 
-        public static long getQuestKey(int mainQuestId) {
+    public static long getQuestKey(int mainQuestId) {
         QuestEncryptionKey questEncryptionKey = GameData.getMainQuestEncryptionMap().get(mainQuestId);
         return questEncryptionKey != null ? questEncryptionKey.getEncryptionKey() : 0L;
     }
@@ -71,27 +77,38 @@ public class QuestManager extends BasePlayerManager {
         super(player);
         this.player = player;
         this.mainQuests = new Int2ObjectOpenHashMap<>();
-        this.addToQuestListUpdateNotify = new ArrayList<>();
     }
 
-    public void onNewPlayerCreate() {
+    public void onPlayerBorn() {
+        // TODO scan the quest and start the quest with acceptCond fulfilled
+        // The off send 3 request in that order: 1. FinishedParentQuestNotify, 2. QuestListNotify, 3. ServerCondMeetQuestListUpdateNotify
 
         List<GameMainQuest> newQuests = this.addMultMainQuests(newPlayerMainQuests);
-        //getPlayer().sendPacket(new PacketServerCondMeetQuestListUpdateNotify(newPlayerServerCondMeetQuestListUpdateNotify));
+        for (GameMainQuest mainQuest : newQuests) {
+            startMainQuest(mainQuest.getParentQuestId());
+        }
+
         //getPlayer().sendPacket(new PacketFinishedParentQuestUpdateNotify(newQuests));
-
-
+        //getPlayer().sendPacket(new PacketQuestListNotify(subQuests));
+        //getPlayer().sendPacket(new PacketServerCondMeetQuestListUpdateNotify(newPlayerServerCondMeetQuestListUpdateNotify));
     }
 
     public void onLogin() {
 
         List<GameMainQuest> activeQuests = getActiveMainQuests();
+        List<GameQuest> activeSubs = new ArrayList<>(activeQuests.size());
         for (GameMainQuest quest : activeQuests) {
             List<Position> rewindPos = quest.rewind(); // <pos, rotation>
+            var activeQuest = quest.getActiveQuests();
             if (rewindPos != null) {
                 getPlayer().getPosition().set(rewindPos.get(0));
                 getPlayer().getRotation().set(rewindPos.get(1));
             }
+            if(activeQuest!=null && rewindPos!=null){
+                //activeSubs.add(activeQuest);
+                //player.sendPacket(new PacketQuestProgressUpdateNotify(activeQuest));
+            }
+            quest.checkProgress();
         }
     }
 
@@ -103,6 +120,10 @@ public class QuestManager extends BasePlayerManager {
             newQuests.add(getMainQuestById(id));
         }
         return newQuests;
+    }
+
+    public void enableQuests() {
+        onPlayerBorn();
     }
 
     /*
@@ -185,6 +206,7 @@ public class QuestManager extends BasePlayerManager {
 
     public GameQuest addQuest(int questId) {
         QuestData questConfig = GameData.getQuestDataMap().get(questId);
+
         if (questConfig == null) {
             return null;
         }
@@ -202,17 +224,11 @@ public class QuestManager extends BasePlayerManager {
 
         // Forcefully start
         quest.start();
-
-        // Save main quest
-        mainQuest.save();
-
-        // Send packet
-        getPlayer().sendPacket(new PacketQuestListUpdateNotify(mainQuest.getChildQuests().values().stream()
-            .filter(p -> p.getState() != QuestState.QUEST_STATE_UNSTARTED)
-            .toList()));
+        checkQuestAlreadyFullfilled(quest);
 
         return quest;
     }
+
     public void startMainQuest(int mainQuestId) {
         var mainQuestData = GameData.getMainQuestDataMap().get(mainQuestId);
 
@@ -224,13 +240,24 @@ public class QuestManager extends BasePlayerManager {
             .min(Comparator.comparingInt(MainQuestData.SubQuestData::getOrder))
             .map(MainQuestData.SubQuestData::getSubId)
             .ifPresent(this::addQuest);
+        //TODO find a better way then hardcoding to detect needed required quests
+        if(mainQuestId == 355){
+            startMainQuest(361);
+            startMainQuest(418);
+            startMainQuest(423);
+            startMainQuest(20509);
+
+        }
     }
-    public void triggerEvent(QuestTrigger condType, int... params) {
-        triggerEvent(condType, "", params);
+    public void queueEvent(QuestTrigger condType, int... params) {
+        queueEvent(condType, "", params);
     }
 
     //TODO
-    public void triggerEvent(QuestTrigger condType, String paramStr, int... params) {
+    public void queueEvent(QuestTrigger condType, String paramStr, int... params) {
+        eventExecutor.submit(() -> triggerEvent(condType, paramStr, params));
+    }
+    public void triggerEvent(QuestTrigger condType, String paramStr, int... params){
         Grasscutter.getLogger().debug("Trigger Event {}, {}, {}", condType, paramStr, params);
         List<GameMainQuest> checkMainQuests = this.getMainQuests().values().stream()
             .filter(i -> i.getState() != ParentQuestState.PARENT_QUEST_STATE_FINISHED)
@@ -248,6 +275,11 @@ public class QuestManager extends BasePlayerManager {
             case QUEST_COND_QUEST_GLOBAL_VAR_EQUAL:
             case QUEST_COND_QUEST_GLOBAL_VAR_GREATER:
             case QUEST_COND_QUEST_GLOBAL_VAR_LESS:
+            case QUEST_COND_PACK_HAVE_ITEM:
+            case QUEST_COND_ITEM_NUM_LESS_THAN:
+            case QUEST_COND_ACTIVITY_OPEN:
+            case QUEST_COND_ACTIVITY_END:
+            case QUEST_COND_ACTIVITY_COND:
                 for (GameMainQuest mainquest : checkMainQuests) {
                     mainquest.tryAcceptSubQuests(condType, paramStr, params);
                 }
@@ -255,6 +287,7 @@ public class QuestManager extends BasePlayerManager {
 
             //fail Conds
             case QUEST_CONTENT_NOT_FINISH_PLOT:
+            case QUEST_CONTENT_ANY_MANUAL_TRANSPORT:
                 for (GameMainQuest mainquest : checkMainQuests) {
                     mainquest.tryFailSubQuests(condType, paramStr, params);
                 }
@@ -263,15 +296,23 @@ public class QuestManager extends BasePlayerManager {
             case QUEST_CONTENT_COMPLETE_TALK:
             case QUEST_CONTENT_FINISH_PLOT:
             case QUEST_CONTENT_COMPLETE_ANY_TALK:
-            case QUEST_CONTENT_LUA_NOTIFY:
             case QUEST_CONTENT_QUEST_VAR_EQUAL:
             case QUEST_CONTENT_QUEST_VAR_GREATER:
             case QUEST_CONTENT_QUEST_VAR_LESS:
             case QUEST_CONTENT_ENTER_DUNGEON:
-            case QUEST_CONTENT_ENTER_ROOM:
+            case QUEST_CONTENT_ENTER_MY_WORLD_SCENE:
             case QUEST_CONTENT_INTERACT_GADGET:
             case QUEST_CONTENT_TRIGGER_FIRE:
             case QUEST_CONTENT_UNLOCK_TRANS_POINT:
+            case QUEST_CONTENT_UNLOCK_AREA:
+            case QUEST_CONTENT_SKILL:
+            case QUEST_CONTENT_OBTAIN_ITEM:
+            case QUEST_CONTENT_MONSTER_DIE:
+            case QUEST_CONTENT_DESTROY_GADGET:
+            case QUEST_CONTENT_PLAYER_LEVEL_UP:
+            case QUEST_CONTENT_USE_ITEM:
+            case QUEST_CONTENT_ENTER_VEHICLE:
+            case QUEST_CONTENT_FINISH_DUNGEON:
                 for (GameMainQuest mainQuest : checkMainQuests) {
                     mainQuest.tryFinishSubQuests(condType, paramStr, params);
                 }
@@ -282,6 +323,12 @@ public class QuestManager extends BasePlayerManager {
             case QUEST_CONTENT_QUEST_STATE_EQUAL:
             case QUEST_CONTENT_ADD_QUEST_PROGRESS:
             case QUEST_CONTENT_LEAVE_SCENE:
+            case QUEST_CONTENT_ITEM_LESS_THAN:
+            case QUEST_CONTENT_KILL_MONSTER:
+            case QUEST_CONTENT_LUA_NOTIFY:
+            case QUEST_CONTENT_ENTER_MY_WORLD:
+            case QUEST_CONTENT_ENTER_ROOM:
+            case QUEST_CONTENT_FAIL_DUNGEON:
                 for (GameMainQuest mainQuest : checkMainQuests) {
                     mainQuest.tryFailSubQuests(condType, paramStr, params);
                     mainQuest.tryFinishSubQuests(condType, paramStr, params);
@@ -295,11 +342,36 @@ public class QuestManager extends BasePlayerManager {
             default:
                 Grasscutter.getLogger().error("Unhandled QuestTrigger {}", condType);
         }
-        if (this.addToQuestListUpdateNotify.size() != 0) {
-            this.getPlayer().getSession().send(new PacketQuestListUpdateNotify(this.addToQuestListUpdateNotify));
-            this.addToQuestListUpdateNotify.clear();
-        }
+    }
 
+    /**
+     * TODO maybe trigger them delayed to allow basic communication finish first
+     * @param quest
+     */
+    public void checkQuestAlreadyFullfilled(GameQuest quest){
+        Grasscutter.getGameServer().getScheduler().scheduleDelayedTask(() -> {
+            for(var condition : quest.getQuestData().getFinishCond()){
+                switch (condition.getType()) {
+                    case QUEST_CONTENT_OBTAIN_ITEM, QUEST_CONTENT_ITEM_LESS_THAN -> {
+                        //check if we already own enough of the item
+                        var item = getPlayer().getInventory().getItemByGuid(condition.getParam()[0]);
+                        queueEvent(condition.getType(), condition.getParam()[0], item != null ? item.getCount() : 0);
+                    }
+                    case QUEST_CONTENT_UNLOCK_TRANS_POINT -> {
+                        var scenePoints = getPlayer().getUnlockedScenePoints().get(condition.getParam()[0]);
+                        if (scenePoints != null && scenePoints.contains(condition.getParam()[1])) {
+                            queueEvent(condition.getType(), condition.getParam()[0], condition.getParam()[1]);
+                        }
+                    }
+                    case QUEST_CONTENT_UNLOCK_AREA -> {
+                        var sceneAreas = getPlayer().getUnlockedSceneAreas().get(condition.getParam()[0]);
+                        if (sceneAreas != null && sceneAreas.contains(condition.getParam()[1])) {
+                            queueEvent(condition.getType(), condition.getParam()[0], condition.getParam()[1]);
+                        }
+                    }
+                }
+            }
+        }, 1);
     }
 
     public List<QuestGroupSuite> getSceneGroupSuite(int sceneId) {

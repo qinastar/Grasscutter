@@ -84,6 +84,7 @@
         "artifactId": "無效的聖遺物ID。",
         "avatarId": "無效的角色ID。",
         "avatarLevel": "無效的角色等級。",
+        "cfgId": "🇺🇸Invalid cfg ID.",
         "entityId": "無效的實體ID。",
         "itemId": "無效的物品ID。",
         "itemLevel": "無效的物品等級。",
@@ -151,6 +152,10 @@
       "in_dungeon_error": "你已經在祕境中了。",
       "description": "進入指定祕境。"
     },
+    "entity": {
+      "description": "🇺🇸Modify an existing entity's properties",
+      "not_found_error": "🇺🇸Entity does not exist"
+    },
     "give": {
       "usage_relic": "用法： give <artifactID> [mainPropID] [<appendPropID>[,<times>]]... [lv<level 0-20>]",
       "illegal_relic": "你不可以取得這個聖遺物，因為該聖遺物ID在黑名單列表內。",
@@ -215,7 +220,8 @@
       "finished": "已完成任務 %s",
       "not_found": "未找到任務",
       "invalid_id": "無效的任務ID",
-      "description": "添加或完成任務"
+      "description": "添加或完成任務",
+      "enabled": "Questing enabled."
     },
     "reload": {
       "reload_start": "正在重新加載設定檔。",

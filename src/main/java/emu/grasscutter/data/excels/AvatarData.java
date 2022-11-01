@@ -30,7 +30,7 @@ public class AvatarData extends GameResource {
     @Getter private String cutsceneShow;
     @Getter private int skillDepotId;
     @Getter private int staminaRecoverSpeed;
-    @Getter private List<String> candSkillDepotIds;
+    @Getter private List<Integer> candSkillDepotIds;
     @Getter private String avatarIdentityType;
     @Getter private List<Integer> avatarPromoteRewardLevelList;
     @Getter private List<Integer> avatarPromoteRewardIdList;

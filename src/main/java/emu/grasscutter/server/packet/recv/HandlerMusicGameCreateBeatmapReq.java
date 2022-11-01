@@ -59,7 +59,7 @@ public class HandlerMusicGameCreateBeatmapReq extends PacketHandler {
         // link this beatmap to player's personal data
         handler.addPersonalBeatmap(playerData.get(), musicGameBeatmap);
 
-        session.send(new PacketActivityInfoNotify(handler.toProto(playerData.get())));
+        session.send(new PacketActivityInfoNotify(handler.toProto(playerData.get(), session.getPlayer().getActivityManager().getConditionExecutor())));
         session.send(new PacketMusicGameCreateBeatmapRsp(musicGameBeatmap.getMusicShareId(), req.getUnknownEnum1()));
 	}
 

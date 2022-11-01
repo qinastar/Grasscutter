@@ -2,6 +2,7 @@ package emu.grasscutter.server.packet.recv;
 
 import emu.grasscutter.game.entity.EntityGadget;
 import emu.grasscutter.game.entity.GameEntity;
+import emu.grasscutter.game.quest.enums.QuestTrigger;
 import emu.grasscutter.net.packet.Opcodes;
 import emu.grasscutter.net.packet.PacketOpcodes;
 import emu.grasscutter.net.proto.SelectWorktopOptionReqOuterClass.SelectWorktopOptionReq;
@@ -26,9 +27,9 @@ public class HandlerSelectWorktopOptionReq extends PacketHandler {
             }
             session.getPlayer().getScene().selectWorktopOptionWith(req);
             session.getPlayer().getScene().getScriptManager().callEvent(
-                    EventType.EVENT_SELECT_OPTION,
-                    new ScriptArgs(entity.getConfigId(), req.getOptionId())
+                    new ScriptArgs(EventType.EVENT_SELECT_OPTION, entity.getConfigId(), req.getOptionId())
             );
+            session.getPlayer().getQuestManager().queueEvent(QuestTrigger.QUEST_CONTENT_WORKTOP_SELECT, entity.getConfigId(), req.getOptionId());
         } finally {
             // Always send packet
             session.send(new PacketSelectWorktopOptionRsp(req.getGadgetEntityId(), req.getOptionId()));

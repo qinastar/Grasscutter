@@ -1,8 +1,5 @@
 package emu.grasscutter.game.quest;
 
-import java.util.Set;
-
-import emu.grasscutter.data.excels.QuestData;
 import emu.grasscutter.game.quest.handlers.QuestExecHandler;
 import emu.grasscutter.server.game.BaseGameSystem;
 import emu.grasscutter.server.game.GameServer;
@@ -84,14 +81,18 @@ public class QuestSystem extends BaseGameSystem {
         return handler.execute(quest, condition, paramStr, params);
     }
 
-    public boolean triggerExec(GameQuest quest, QuestExecParam execParam, String... params) {
+    public void triggerExec(GameQuest quest, QuestExecParam execParam, String... params) {
         QuestExecHandler handler = execHandlers.get(execParam.getType().getValue());
 
         if (handler == null || quest.getQuestData() == null) {
             Grasscutter.getLogger().debug("Could not trigger exec {} at {}", execParam.getType().getValue(), quest.getQuestData());
-            return false;
+            return;
         }
 
-        return handler.execute(quest, execParam, params);
+        QuestManager.eventExecutor.submit(() -> {
+            if(!handler.execute(quest, execParam, params)){
+                Grasscutter.getLogger().debug("exec trigger failed {} at {}", execParam.getType().getValue(), quest.getQuestData());
+            }
+        });
     }
 }

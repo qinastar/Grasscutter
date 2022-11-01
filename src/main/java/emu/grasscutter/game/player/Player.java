@@ -14,12 +14,12 @@ import emu.grasscutter.game.activity.ActivityManager;
 import emu.grasscutter.game.avatar.Avatar;
 import emu.grasscutter.game.avatar.AvatarStorage;
 import emu.grasscutter.game.battlepass.BattlePassManager;
-import emu.grasscutter.game.entity.*;
-import emu.grasscutter.game.home.GameHome;
+import emu.grasscutter.game.entity.GameEntity;
 import emu.grasscutter.game.expedition.ExpeditionInfo;
 import emu.grasscutter.game.friends.FriendsList;
 import emu.grasscutter.game.friends.PlayerProfile;
 import emu.grasscutter.game.gacha.PlayerGachaInfo;
+import emu.grasscutter.game.home.GameHome;
 import emu.grasscutter.game.inventory.GameItem;
 import emu.grasscutter.game.inventory.Inventory;
 import emu.grasscutter.game.mail.Mail;
@@ -29,17 +29,15 @@ import emu.grasscutter.game.managers.cooking.CookingCompoundManager;
 import emu.grasscutter.game.managers.cooking.CookingManager;
 import emu.grasscutter.game.managers.FurnitureManager;
 import emu.grasscutter.game.managers.ResinManager;
+import emu.grasscutter.game.managers.SotSManager;
 import emu.grasscutter.game.managers.deforestation.DeforestationManager;
 import emu.grasscutter.game.managers.energy.EnergyManager;
 import emu.grasscutter.game.managers.forging.ActiveForgeData;
 import emu.grasscutter.game.managers.forging.ForgingManager;
-import emu.grasscutter.game.managers.mapmark.*;
+import emu.grasscutter.game.managers.mapmark.MapMark;
+import emu.grasscutter.game.managers.mapmark.MapMarksManager;
 import emu.grasscutter.game.managers.stamina.StaminaManager;
-import emu.grasscutter.game.managers.SotSManager;
-import emu.grasscutter.game.props.ActionReason;
-import emu.grasscutter.game.props.ClimateType;
-import emu.grasscutter.game.props.PlayerProperty;
-import emu.grasscutter.game.props.WatcherTriggerType;
+import emu.grasscutter.game.props.*;
 import emu.grasscutter.game.quest.QuestManager;
 import emu.grasscutter.game.quest.enums.QuestTrigger;
 import emu.grasscutter.game.shop.ShopLimit;
@@ -48,17 +46,20 @@ import emu.grasscutter.game.tower.TowerManager;
 import emu.grasscutter.game.world.Scene;
 import emu.grasscutter.game.world.World;
 import emu.grasscutter.net.packet.BasePacket;
-import emu.grasscutter.net.proto.*;
 import emu.grasscutter.net.proto.AbilityInvokeEntryOuterClass.AbilityInvokeEntry;
 import emu.grasscutter.net.proto.AttackResultOuterClass.AttackResult;
 import emu.grasscutter.net.proto.CombatInvokeEntryOuterClass.CombatInvokeEntry;
 import emu.grasscutter.net.proto.GadgetInteractReqOuterClass.GadgetInteractReq;
 import emu.grasscutter.net.proto.MpSettingTypeOuterClass.MpSettingType;
 import emu.grasscutter.net.proto.OnlinePlayerInfoOuterClass.OnlinePlayerInfo;
+import emu.grasscutter.net.proto.PlayerApplyEnterMpResultNotifyOuterClass;
 import emu.grasscutter.net.proto.PlayerLocationInfoOuterClass.PlayerLocationInfo;
+import emu.grasscutter.net.proto.PlayerWorldLocationInfoOuterClass;
 import emu.grasscutter.net.proto.ProfilePictureOuterClass.ProfilePicture;
 import emu.grasscutter.net.proto.PropChangeReasonOuterClass.PropChangeReason;
+import emu.grasscutter.net.proto.ShowAvatarInfoOuterClass;
 import emu.grasscutter.net.proto.SocialDetailOuterClass.SocialDetail;
+import emu.grasscutter.net.proto.SocialShowAvatarInfoOuterClass;
 import emu.grasscutter.scripts.data.SceneRegion;
 import emu.grasscutter.server.event.player.PlayerJoinEvent;
 import emu.grasscutter.server.event.player.PlayerQuitEvent;
@@ -67,15 +68,13 @@ import emu.grasscutter.server.game.GameSession;
 import emu.grasscutter.server.game.GameSession.SessionState;
 import emu.grasscutter.server.packet.send.*;
 import emu.grasscutter.utils.DateHelper;
-import emu.grasscutter.utils.Position;
 import emu.grasscutter.utils.MessageHandler;
+import emu.grasscutter.utils.Position;
 import emu.grasscutter.utils.Utils;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import lombok.Getter;
 import lombok.Setter;
-
-import static emu.grasscutter.config.Configuration.*;
 
 import java.time.DayOfWeek;
 import java.time.Instant;
@@ -84,6 +83,8 @@ import java.time.ZoneId;
 import java.util.*;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.LinkedBlockingQueue;
+
+import static emu.grasscutter.config.Configuration.GAME_OPTIONS;
 
 @Entity(value = "players", useDiscriminator = false)
 public class Player {
@@ -424,6 +425,7 @@ public class Player {
 
             // Handle open state unlocks from level-up.
             this.getProgressManager().tryUnlockOpenStates();
+            this.getQuestManager().queueEvent(QuestTrigger.QUEST_CONTENT_PLAYER_LEVEL_UP, level);
 
             return true;
         }
@@ -564,11 +566,11 @@ public class Player {
 
     public void onEnterRegion(SceneRegion region) {
         getQuestManager().forEachActiveQuest(quest -> {
-            if (quest.getTriggers().containsKey("ENTER_REGION_"+ region.config_id)) {
+            if (quest.getTriggerData() != null && quest.getTriggers().containsKey("ENTER_REGION_"+ region.config_id)) {
                 // If trigger hasn't been fired yet
                 if (!Boolean.TRUE.equals(quest.getTriggers().put("ENTER_REGION_"+ region.config_id, true))) {
                     //getSession().send(new PacketServerCondMeetQuestListUpdateNotify());
-                    getQuestManager().triggerEvent(QuestTrigger.QUEST_CONTENT_TRIGGER_FIRE, quest.getTriggerData().get("ENTER_REGION_"+ region.config_id).getId(),0);
+                    getQuestManager().queueEvent(QuestTrigger.QUEST_CONTENT_TRIGGER_FIRE, quest.getTriggerData().get("ENTER_REGION_"+ region.config_id).getId(),0);
                 }
             }
         });
@@ -581,7 +583,7 @@ public class Player {
                 // If trigger hasn't been fired yet
                 if (!Boolean.TRUE.equals(quest.getTriggers().put("LEAVE_REGION_"+ region.config_id, true))) {
                     getSession().send(new PacketServerCondMeetQuestListUpdateNotify());
-                    getQuestManager().triggerEvent(QuestTrigger.QUEST_CONTENT_TRIGGER_FIRE, quest.getTriggerData().get("LEAVE_REGION_"+ region.config_id).getId(),0);
+                    getQuestManager().queueEvent(QuestTrigger.QUEST_CONTENT_TRIGGER_FIRE, quest.getTriggerData().get("LEAVE_REGION_"+ region.config_id).getId(),0);
                 }
             }
         });
@@ -785,6 +787,11 @@ public class Player {
 
     public void addAvatar(Avatar avatar) {
         addAvatar(avatar, true);
+    }
+
+    public void addAvatar(int avatarId) {
+        // I dont see why we cant do this lolz
+        addAvatar(new Avatar(avatarId), true);
     }
 
     public void addFlycloak(int flycloakId) {
@@ -1143,13 +1150,17 @@ public class Player {
         // Load from db
         this.getAvatars().loadFromDatabase();
         this.getInventory().loadFromDatabase();
-        this.getAvatars().postLoad(); // Needs to be called after inventory is handled
 
         this.getFriendsList().loadFromDatabase();
         this.getMailHandler().loadFromDatabase();
         this.getQuestManager().loadFromDatabase();
 
         this.loadBattlePassManager();
+        this.getAvatars().postLoad(); // Needs to be called after inventory is handled
+    }
+
+    public void onPlayerBorn() {
+        if (Grasscutter.getConfig().server.game.gameOptions.questing) getQuestManager().onPlayerBorn();
     }
 
     public void onLogin() {
@@ -1177,6 +1188,9 @@ public class Player {
 
         // Execute daily reset logic if this is a new day.
         this.doDailyReset();
+
+        // Activity needed for some quests
+        activityManager = new ActivityManager(this);
 
         // Rewind active quests, and put the player to a rewind position it finds (if any) of an active quest
         getQuestManager().onLogin();
@@ -1212,8 +1226,6 @@ public class Player {
         // Home
         home = GameHome.getByUid(getUid());
         home.onOwnerLogin(this);
-        // Activity
-        activityManager = new ActivityManager(this);
 
         session.send(new PacketPlayerEnterSceneNotify(this)); // Enter game world
         session.send(new PacketPlayerLevelRewardUpdateNotify(rewardedLevels));
